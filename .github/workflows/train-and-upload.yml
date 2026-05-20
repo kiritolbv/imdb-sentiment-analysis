@@ -1,0 +1,70 @@
+name: Train and Upload to Hugging Face
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  train-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install pandas numpy scikit-learn torch joblib huggingface_hub
+
+    - name: Train model
+      run: python train.py
+
+    - name: Upload to Hugging Face
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      run: |
+        from huggingface_hub import HfApi
+        import os
+        api = HfApi()
+        token = os.environ['HF_TOKEN']
+        repo_id = "kiritolbv/imdb-sentiment-analysis"
+        
+        # Créer le repo s'il n'existe pas
+        try:
+            api.create_repo(repo_id, token=token, exist_ok=True)
+            print(f"Repo {repo_id} prêt")
+        except:
+            print(f"Repo {repo_id} existe déjà")
+        
+        # Upload des fichiers
+        fichiers = ["predict.py", "README.md", "requirements.txt"]
+        
+        for f in fichiers:
+            if os.path.exists(f):
+                api.upload_file(
+                    path_or_fileobj=f,
+                    path_in_repo=f,
+                    repo_id=repo_id,
+                    token=token
+                )
+                print(f"Uploadé: {f}")
+        
+        # Upload du dossier model
+        for f in os.listdir("model"):
+            chemin = f"model/{f}"
+            api.upload_file(
+                path_or_fileobj=chemin,
+                path_in_repo=chemin,
+                repo_id=repo_id,
+                token=token
+            )
+            print(f"Uploadé: {chemin}")
+        
+        print(f"\n✅ Tout est uploadé sur: https://huggingface.co/{repo_id}")
+      shell: python
